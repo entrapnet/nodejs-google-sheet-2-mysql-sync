@@ -8,12 +8,13 @@ const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 // created automatically when the authorization flow completes for the first
 // time.
 const TOKEN_PATH = 'token.json';
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
 
-let google_sheet_id = "";
+let config = {
+    google_sheet_id: "",
+    google_range: ""
+}
+
+let lastConfig = null;
 
 // Load client secrets from a local file.
 fs.readFile('credentials.json', (err, content) => {
@@ -53,7 +54,11 @@ function getNewToken(oAuth2Client, callback) {
     scope: SCOPES,
   });
   console.log('Authorize this app by visiting this url:', authUrl);
-  
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
   rl.question('Enter the code from that page here: ', (code) => {
     rl.close();
     oAuth2Client.getToken(code, (err, token) => {
@@ -69,17 +74,87 @@ function getNewToken(oAuth2Client, callback) {
   });
 }
 
+function getLastConfig() {
+    return new Promise((resolve, reject) => {
+        if (fs.existsSync("./config.json")) {
+            lastConfig = JSON.parse( fs.readFileSync('./config.json',{encoding:'utf8', flag:'r'}))
+            resolve(true)
+        } else {
+            resolve(false)
+        }
+    })
+    
+}
+
 function getGoogleSheetID() {
     return new Promise((resolve, reject) => {
-        if (google_sheet_id != "") {
-            resolve(google_sheet_id)
+        if (config.google_sheet_id != "") {
+            resolve(config.google_sheet_id)
         } else {
             //'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
-            rl.question("Please enter google sheet id: ", (gsid) => {
+            const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout,
+              });
+            
+            rl.question(`Please enter google sheet id: [${lastConfig.google_sheet_id}] `, (return_gsheet_id) => {
                 rl.close()
-                resolve(gsid)
+                if (return_gsheet_id == "") {
+                    config.google_sheet_id = lastConfig.google_sheet_id
+                } else {
+                    config.google_sheet_id = return_gsheet_id
+                }
+                
+                resolve(config.google_sheet_id)
             })
         }
+    })
+}
+
+function getRange() {
+    return new Promise((resolve, reject) => {
+        if (config.google_range != "") {
+            resolve(config.google_range)
+        } else {
+            const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout,
+              });
+            
+            //'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+            rl.question(`Please enter range: [${lastConfig.google_range}]`, (return_range) => {
+                rl.close()
+                if (return_range == "") {
+                    config.google_range = lastConfig.google_range
+                } else {
+                    config.google_range = return_range
+                }
+                
+                resolve(config.google_range)
+            })
+        }
+    })
+}
+
+function saveIntoConfig() {
+    return new Promise((resolve, reject) => {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+          });
+        
+        rl.question("Save into config?: [Y/n]", (return_save) => {
+            rl.close()
+            if (return_save.toUpperCase() == "Y" || return_save == "") {
+                fs.writeFile('./config.json', JSON.stringify(config), (err) => {
+                    if (err) {
+                        reject(err)
+                    }
+                    resolve(true)
+                })
+            } 
+            
+        })
     })
 }
 
@@ -90,19 +165,46 @@ function getGoogleSheetID() {
  */
 function listMajors(auth) {
   const sheets = google.sheets({version: 'v4', auth});
-  getGoogleSheetID().then((sheet_id) => {
+  
+  let PA = Promise.resolve()
+
+  PA = PA.then(() => {
+      return getLastConfig()
+  })
+
+  PA = PA.then(() => {
+      return getGoogleSheetID()
+  })
+
+  PA = PA.then(() => {
+    return getRange()
+  })
+
+//   PA = PA.then(() => {
+//       return saveIntoConfig()
+//   })
+
+  PA.then(() => {
     sheets.spreadsheets.values.get({
-        spreadsheetId: sheet_id,
-        range: 'Class Data!A2:E',
+        spreadsheetId: config.google_sheet_id,
+        range: config.google_range,
       }, (err, res) => {
         if (err) return console.log('The API returned an error: ' + err);
         const rows = res.data.values;
         if (rows.length) {
-          console.log('Name, Major:');
+        //   console.log('Name, Major:');
           // Print columns A and E, which correspond to indices 0 and 4.
-          rows.map((row) => {
-            console.log(`${row[0]}, ${row[4]}`);
+          rows.forEach((row) => {
+              let rowText = ""
+              row.forEach((r) => {
+                if (rowText != "") {
+                    rowText += ","
+                }
+                rowText += r
+              })
+            console.log(rowText);
           });
+          saveIntoConfig();
         } else {
           console.log('No data found.');
         }
