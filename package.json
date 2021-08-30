@@ -18,7 +18,8 @@
   },
   "homepage": "https://github.com/entrapnet/nodejs-google-sheet-2-mysql-sync#readme",
   "dependencies": {
+    "danfojs-node": "^0.2.8",
     "googleapis": "^39.2.0",
-    "mysql": "^2.18.1"
+    "mysql2": "^2.3.0"
   }
 }

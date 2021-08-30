@@ -15,7 +15,9 @@ let config = {
     mysql_server: "",
     mysql_user_id: "",
     mysql_password: "",
-    mysql_table: ""
+    mysql_table: "",
+    mysql_database: "",
+    first_row_header: true,
 }
 
 let lastConfig = null;
@@ -82,8 +84,10 @@ function getLastConfig() {
     return new Promise((resolve, reject) => {
         if (fs.existsSync("./config.json")) {
             lastConfig = JSON.parse( fs.readFileSync('./config.json',{encoding:'utf8', flag:'r'}))
+            config = lastConfig
             resolve(true)
         } else {
+            lastConfig = config
             resolve(false)
         }
     })
@@ -162,25 +166,100 @@ function saveIntoConfig() {
     })
 }
 
+function getDataFromSpreadsheet(auth) {
+  return new Promise((resolve, reject) => {
+    const sheets = google.sheets({version: 'v4', auth});
+    let data = []
+    sheets.spreadsheets.values.get({
+      spreadsheetId: config.google_sheet_id,
+      range: config.google_range,
+    }, (err, res) => {
+      if (err) return console.log('The API returned an error: ' + err);
+      const rows = res.data.values;
+      if (rows.length) {
+        let first_row = true
+        let header = []
+        rows.forEach((row) => {
+          
+          data.push({})
+            let rowText = ""
+            row.forEach((r, r_index) => {
+              if (first_row && config.first_row_header) {
+                header.push(r)
+              } else {
+                if (header.length > 0) {
+                  data[data.length-1][header[r_index]] = r
+                } else {
+                  data[data.length-1][r_index] = r
+                }
+              }
+              
+            })
+            if (first_row) {
+              first_row = false
+              
+            }
+          //console.log(rowText);
+        });
+        resolve(data)
+        //saveIntoConfig();
+      } else {
+        resolve([])
+      }
+    });
+  })
+}
+
+function processToMySQL(JSON) {
+  return new Promise((resolve, reject) => {
+    let mysql = require('mysql2');
+
+    let con = mysql.createConnection({
+      host: config.mysql_server,
+      user: config.mysql_user_id,
+      password: config.mysql_password,
+      database: config.mysql_database
+    });
+
+    con.connect(function(err) {
+      if (err) reject(err);
+      console.log("Connected!");
+      con.query(`show columns from ${config.mysql_table};`, (err, rows, fields) => {
+        
+        if (err) {
+          reject(err)
+        }
+        rows.forEach((r) => {
+          console.log(r.Field)
+        })
+        //console.log(err);
+        //console.log(rows)
+      })
+      con.end()
+      resolve(true)
+    });
+  })
+}
+
 /**
  * Prints the names and majors of students in a sample spreadsheet:
  * @see https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
  * @param {google.auth.OAuth2} auth The authenticated Google OAuth client.
  */
 function listMajors(auth) {
-  const sheets = google.sheets({version: 'v4', auth});
   
-  let PA = Promise.resolve()
+  
+  let preWorkArray = Promise.resolve()
 
-  PA = PA.then(() => {
+  preWorkArray = preWorkArray.then(() => {
       return getLastConfig()
   })
 
-  PA = PA.then(() => {
+  preWorkArray = preWorkArray.then(() => {
       return getGoogleSheetID()
   })
 
-  PA = PA.then(() => {
+  preWorkArray = preWorkArray.then(() => {
     return getRange()
   })
 
@@ -188,31 +267,14 @@ function listMajors(auth) {
 //       return saveIntoConfig()
 //   })
 
-  PA.then(() => {
-    sheets.spreadsheets.values.get({
-        spreadsheetId: config.google_sheet_id,
-        range: config.google_range,
-      }, (err, res) => {
-        if (err) return console.log('The API returned an error: ' + err);
-        const rows = res.data.values;
-        if (rows.length) {
-        //   console.log('Name, Major:');
-          // Print columns A and E, which correspond to indices 0 and 4.
-          rows.forEach((row) => {
-              let rowText = ""
-              row.forEach((r) => {
-                if (rowText != "") {
-                    rowText += ","
-                }
-                rowText += r
-              })
-            console.log(rowText);
-          });
-          saveIntoConfig();
-        } else {
-          console.log('No data found.');
-        }
-      });
+  preWorkArray.then(() => {
+    getDataFromSpreadsheet(auth).then((data) => {
+      console.log(data)
+      //saveIntoConfig()
+      processToMySQL(data)
+
+
+    })
   })
   
 }
