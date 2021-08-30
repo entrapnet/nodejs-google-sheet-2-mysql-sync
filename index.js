@@ -11,7 +11,11 @@ const TOKEN_PATH = 'token.json';
 
 let config = {
     google_sheet_id: "",
-    google_range: ""
+    google_range: "",
+    mysql_server: "",
+    mysql_user_id: "",
+    mysql_password: "",
+    mysql_table: ""
 }
 
 let lastConfig = null;
