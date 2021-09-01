@@ -1,6 +1,7 @@
 const fs = require('fs');
 const readline = require('readline');
 const {google, run_v1} = require('googleapis');
+const { stringify } = require('querystring');
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
@@ -18,6 +19,8 @@ let config = {
     mysql_table: "",
     mysql_database: "",
     first_row_header: true,
+    mapping: {},
+    header: [],
 }
 
 let lastConfig = null;
@@ -85,10 +88,13 @@ function getLastConfig() {
         if (fs.existsSync("./config.json")) {
             lastConfig = JSON.parse( fs.readFileSync('./config.json',{encoding:'utf8', flag:'r'}))
             config = lastConfig
+            config.field_type = {}
             resolve(true)
         } else {
-            lastConfig = config
-            resolve(false)
+          config.field_type = {}  
+          lastConfig = config
+            
+          resolve(false)
         }
     })
     
@@ -180,8 +186,9 @@ function getDataFromSpreadsheet(auth) {
         let first_row = true
         let header = []
         rows.forEach((row) => {
-          
-          data.push({})
+          if ((first_row && config.first_row_header) == false) {
+            data.push({})
+          }
             let rowText = ""
             row.forEach((r, r_index) => {
               if (first_row && config.first_row_header) {
@@ -196,6 +203,9 @@ function getDataFromSpreadsheet(auth) {
               
             })
             if (first_row) {
+              if (header.length > 0) {
+                config.header = header;
+              }
               first_row = false
               
             }
@@ -210,7 +220,46 @@ function getDataFromSpreadsheet(auth) {
   })
 }
 
-function processToMySQL(JSON) {
+function matchField(field, field_info) {
+  return new Promise((resolve, reject) => {
+    //console.log(field_info)
+    config.field_type[field] = field_info.Type
+    if (Object.keys(config.mapping).includes(field)) {
+      //console.log(`--------------------`)
+      console.log(`${field} ==> ${config.mapping[field]}`)
+      //console.log(`--------------------`)
+      
+      resolve(config.mapping[field] != "~ignore~" ? field : "")
+    } else {
+
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+      console.log(`--------------------`)
+      console.log(`${field}`)
+      console.log(`--------------------`)
+      config.header.forEach((h, h_index) => {
+        console.log(`${h_index}: ${h}`)
+      })
+      console.log("-1: ignore")
+      rl.question("Option: ", (return_option) => {
+        rl.close();
+        let option = "~ignore~"
+        if (return_option < config.header.length && return_option != -1) {
+          option = config.header[return_option]
+        }
+        config.mapping[field] = option
+        
+        resolve(option != "~ignore~" ? field : "")
+      
+      })
+    }
+  })
+
+}
+
+function processToMySQL(JSONdata) {
   return new Promise((resolve, reject) => {
     let mysql = require('mysql2');
 
@@ -223,21 +272,118 @@ function processToMySQL(JSON) {
 
     con.connect(function(err) {
       if (err) reject(err);
-      console.log("Connected!");
+      console.log("MYSQL Connected!");
       con.query(`show columns from ${config.mysql_table};`, (err, rows, fields) => {
         
+
+        let sqlColumn = ""
+
         if (err) {
           reject(err)
+          return null;
         }
+
+        let mo_promise = Promise.resolve("");
+        console.log("")
+        console.log("[Mapping]")
         rows.forEach((r) => {
-          console.log(r.Field)
+          
+          mo_promise = mo_promise.then((result) => {
+            if (result != "") {
+              if (sqlColumn != "") {
+                sqlColumn += ","
+              }
+              sqlColumn +=  result 
+            }
+            return matchField(r.Field,r)
+          })
+        })
+
+        mo_promise = mo_promise.then(() => {
+          return new Promise((resolve, reject) => {
+            cleanUpJSON(JSONdata).then((reviseJSON) => {
+              JSONdata = reviseJSON
+              resolve(true)
+            })
+          })
+          
+        })
+
+        mo_promise.then(() => {
+          let sql = `replace into ${config.mysql_table} (${sqlColumn}) values ?`;
+
+          let values = [];
+
+          JSONdata.forEach((j_row) => {
+            let v_row = []
+            sqlColumn.split(",").forEach((col_raw) => {
+              let col = col_raw
+              let value = j_row[config.mapping[col]]
+              if (value == undefined) {
+                value = null
+              }
+              v_row.push(value)
+            })
+            values.push(v_row)           
+          })
+
+          console.log(values)
+          con.query(sql, [values], (err, result) => {
+            if (err) {
+              reject(err);
+            } else {
+              console.log("rows affected " + result.affectedRows);
+              resolve(true)
+              con.end()
+            }
+            
+          });
+
+          
         })
         //console.log(err);
         //console.log(rows)
       })
-      con.end()
-      resolve(true)
+      
+      //resolve(true)
     });
+  })
+}
+
+function decimalCleanUp(value) {
+  return new Promise((resolve, reject) => {
+    let clean_value = value.replace(/[^\d.-]/g, '')
+    if (clean_value == "") {
+      clean_value = null
+    }
+    resolve(clean_value)
+  })
+}
+
+function cleanUpJSON(JSONdata) {
+  return new Promise((resolve, reject) => {
+    if (Object.keys(config.mapping).length > 0) {
+      JSONdata.forEach((j_item, j_index) => {
+        let clean_up_array = []
+        Object.keys(config.mapping).forEach((col) => {
+          if (config.mapping[col] != "~ignore~") {
+            if ( config.field_type[col].substring(0,7) == "decimal") {
+              clean_up_array.push(decimalCleanUp(j_item[col]).then((clean_value) => { 
+                JSONdata[j_index][col] = clean_value
+                return Promise.resolve(true) 
+              }))
+            }
+          }
+          
+          //j_item[col]
+        })
+        Promise.all(clean_up_array).then(() => {
+          resolve(JSONdata)
+        })
+      })
+    } else {
+      resolve(JSONdata)
+    }
   })
 }
 
@@ -271,8 +417,10 @@ function listMajors(auth) {
     getDataFromSpreadsheet(auth).then((data) => {
       console.log(data)
       //saveIntoConfig()
-      processToMySQL(data)
-
+      processToMySQL(data).then(() => {
+        saveIntoConfig();
+      })
+      
 
     })
   })
