@@ -352,6 +352,10 @@ function processToMySQL(JSONdata) {
 
 function decimalCleanUp(value) {
   return new Promise((resolve, reject) => {
+    if (value == null) {
+      resolve(null)
+      return null
+    }
     let clean_value = value.replace(/[^\d.-]/g, '')
     if (clean_value == "") {
       clean_value = null
