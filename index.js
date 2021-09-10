@@ -12,6 +12,8 @@ const TOKEN_PATH = 'token.json';
 
 let config = {
     google_sheet_id: "",
+    config_file : "./config.json",
+    askSaveWhenFinish: true,
     google_range: "",
     mysql_server: "",
     mysql_user_id: "",
@@ -85,8 +87,34 @@ function getNewToken(oAuth2Client, callback) {
 
 function getLastConfig() {
     return new Promise((resolve, reject) => {
-        if (fs.existsSync("./config.json")) {
-            lastConfig = JSON.parse( fs.readFileSync('./config.json',{encoding:'utf8', flag:'r'}))
+      let param_receive = process.argv.slice(2)
+
+      // console.log(param_receive.length)
+
+      
+
+      param_receive.forEach((p) => {
+        param_vl = p.split("=")
+        if (param_vl.length == 2) {
+          if (param_vl[0] == "config") {
+            console.log(`Change config to ./${param_vl[1]}.json`)
+            config.config_file = `./${param_vl[1]}.json`
+          }
+          if (param_vl[0] == "NoAskSave") {
+            config.askSaveWhenFinish = false
+          }
+        }
+      })
+
+      // throw new Error("??")
+
+        if (fs.existsSync(config.config_file)) {
+            
+            lastConfig = JSON.parse( fs.readFileSync(config.config_file,{encoding:'utf8', flag:'r'}))
+            lastConfig.config_file = config.config_file
+            lastConfig.askSaveWhenFinish = config.askSaveWhenFinish
+            console.log(lastConfig)
+            // throw new Error("??")
             config = lastConfig
             config.field_type = {}
             resolve(true)
@@ -152,11 +180,12 @@ function getRange() {
 
 function saveIntoConfig() {
     return new Promise((resolve, reject) => {
+      if (config.askSaveWhenFinish) {
         const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-          });
-        
+          input: process.stdin,
+          output: process.stdout,
+        });
+      
         rl.question("Save into config?: [Y/n]", (return_save) => {
             rl.close()
             if (return_save.toUpperCase() == "Y" || return_save == "") {
@@ -169,6 +198,10 @@ function saveIntoConfig() {
             } 
             
         })
+      } else {
+        resolve(true)
+      }
+        
     })
 }
 
