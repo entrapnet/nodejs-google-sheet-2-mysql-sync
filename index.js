@@ -178,6 +178,144 @@ function getRange() {
     })
 }
 
+function getMysqlServer() {
+  return new Promise((resolve, reject) => {
+      if (config.mysql_server != "") {
+          resolve(config.mysql_server)
+      } else {
+          //'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+          const rl = readline.createInterface({
+              input: process.stdin,
+              output: process.stdout,
+            });
+          
+          rl.question(`Please enter mysql server ip/url: [${lastConfig.mysql_server}] `, (return_mysql_server) => {
+              rl.close()
+              if (return_mysql_server == "") {
+                  config.mysql_server = lastConfig.mysql_server
+              } else {
+                  config.mysql_server = return_mysql_server
+              }
+              
+              resolve(config.mysql_server)
+          })
+      }
+  })
+}
+
+function getMysqlUserID() {
+  return new Promise((resolve, reject) => {
+      if (config.mysql_user_id != "") {
+          resolve(config.mysql_user_id)
+      } else {
+          //'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+          const rl = readline.createInterface({
+              input: process.stdin,
+              output: process.stdout,
+            });
+          
+          rl.question(`Please enter mysql user id: [${lastConfig.mysql_user_id}] `, (return_mysql_user_id) => {
+              rl.close()
+              if (return_mysql_user_id == "") {
+                  config.mysql_server = lastConfig.mysql_user_id
+              } else {
+                  config.mysql_user_id = return_mysql_user_id
+              }
+              
+              resolve(config.mysql_user_id)
+          })
+      }
+  })
+}
+
+function getMysqlPassword() {
+  return new Promise((resolve, reject) => {
+      if (config.mysql_password != "") {
+          resolve(config.mysql_password)
+      } else {
+          //'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+          const rl = readline.createInterface({
+              input: process.stdin,
+              output: process.stdout,
+            });
+          
+          rl.input.on("keypress", function (c, k) {
+            // get the number of characters entered so far:
+            var len = rl.line.length;
+            // move cursor back to the beginning of the input:
+            readline.moveCursor(rl.output, -len, 0);
+            // clear everything to the right of the cursor:
+            readline.clearLine(rl.output, 1);
+            // replace the original input with asterisks:
+            for (var i = 0; i < len; i++) {
+              rl.output.write("*");
+            }
+          })
+          
+          rl.question(`Please enter mysql password: [${lastConfig.mysql_password}] `, (return_mysql_password) => {
+              rl.close()
+              if (return_mysql_password == "") {
+                  config.mysql_server = lastConfig.mysql_password
+              } else {
+                  config.mysql_password = return_mysql_password
+              }
+              
+              resolve(config.mysql_password)
+          })
+      }
+  })
+}
+
+function getMysqlDatabase() {
+  return new Promise((resolve, reject) => {
+      if (config.mysql_database != "") {
+          resolve(config.mysql_database)
+      } else {
+          //'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+          const rl = readline.createInterface({
+              input: process.stdin,
+              output: process.stdout,
+            });
+          
+          rl.question(`Please enter mysql database name: [${lastConfig.mysql_database}] `, (return_mysql_database) => {
+              rl.close()
+              if (return_mysql_database == "") {
+                  config.mysql_database = lastConfig.mysql_database
+              } else {
+                  config.mysql_database = return_mysql_database
+              }
+              
+              resolve(config.mysql_database)
+          })
+      }
+  })
+}
+
+function getMysqlTable() {
+  return new Promise((resolve, reject) => {
+      if (config.mysql_table != "") {
+          resolve(config.mysql_table)
+      } else {
+          //'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+          const rl = readline.createInterface({
+              input: process.stdin,
+              output: process.stdout,
+            });
+          
+          rl.question(`Please enter mysql table name: [${lastConfig.mysql_table}] `, (return_mysql_table) => {
+              rl.close()
+              if (return_mysql_table == "") {
+                  config.mysql_table = lastConfig.mysql_table
+              } else {
+                  config.mysql_table = return_mysql_table
+              }
+              
+              resolve(config.mysql_table)
+          })
+      }
+  })
+}
+
 function saveIntoConfig() {
     return new Promise((resolve, reject) => {
       if (config.askSaveWhenFinish) {
@@ -446,6 +584,25 @@ function listMajors(auth) {
     return getRange()
   })
 
+  preWorkArray = preWorkArray.then(() => {
+    return getMysqlServer()
+  })
+
+  preWorkArray = preWorkArray.then(() => {
+    return getMysqlUserID()
+  })
+
+  preWorkArray = preWorkArray.then(() => {
+    return getMysqlPassword()
+  })
+
+  preWorkArray = preWorkArray.then(() => {
+    return getMysqlDatabase()
+  })
+
+  preWorkArray = preWorkArray.then(() => {
+    return getMysqlTable()
+  })
 //   PA = PA.then(() => {
 //       return saveIntoConfig()
 //   })
